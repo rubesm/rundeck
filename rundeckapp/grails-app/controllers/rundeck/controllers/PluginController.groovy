@@ -1,20 +1,20 @@
 package rundeck.controllers
 
 import com.dtolabs.rundeck.app.support.PluginResourceReq
+import com.dtolabs.rundeck.core.authorization.AuthContext
 import com.dtolabs.rundeck.core.common.Framework
-import com.dtolabs.rundeck.core.plugins.JarPluginProviderLoader
 import com.dtolabs.rundeck.core.plugins.PluginValidator
-import com.dtolabs.rundeck.core.plugins.ScriptPluginProviderLoader
+import com.dtolabs.rundeck.server.authorization.AuthConstants
 import grails.converters.JSON
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest
 import org.springframework.web.servlet.support.RequestContextUtils
 import rundeck.services.UiPluginService
 
-class PluginController {
+class PluginController extends ControllerBase {
     private static final String RELATIVE_PLUGIN_UPLOAD_DIR = "var/tmp/pluginUpload"
     UiPluginService uiPluginService
     Framework rundeckFramework
+    def frameworkService
 
     def pluginIcon(PluginResourceReq resourceReq) {
         if (resourceReq.hasErrors()) {
@@ -132,6 +132,15 @@ class PluginController {
     }
 
     def uploadPlugin() {
+        AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
+        boolean authorized = frameworkService.authorizeApplicationResourceType(authContext,
+                                                          "system",
+                                                          AuthConstants.ACTION_ADMIN)
+        if (!authorized) {
+            flash.errors = ["request.error.unauthorized.title"]
+            redirectToPluginMenu()
+            return
+        }
         if(!params.pluginFile || params.pluginFile.isEmpty()) {
             flash.errors = ["plugin.error.missing.upload.file"]
             redirectToPluginMenu()
@@ -147,6 +156,15 @@ class PluginController {
     }
 
     def installPlugin() {
+        AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
+        boolean authorized = frameworkService.authorizeApplicationResourceType(authContext,
+                                                                               "system",
+                                                                               AuthConstants.ACTION_ADMIN)
+        if (!authorized) {
+            flash.errors = ["request.error.unauthorized.title"]
+            redirectToPluginMenu()
+            return
+        }
         if(!params.pluginUrl) {
             flash.errors = ["plugin.error.missing.url"]
             redirectToPluginMenu()

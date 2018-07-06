@@ -4,11 +4,9 @@ import com.dtolabs.rundeck.core.common.Framework
 import grails.test.mixin.TestFor
 import grails.testing.web.controllers.ControllerUnitTest
 import org.grails.plugins.testing.GrailsMockMultipartFile
+import rundeck.services.FrameworkService
 import spock.lang.Specification
 
-/**
- * See the API for {@link grails.test.mixin.web.ControllerUnitTestMixin} for usage instructions
- */
 class PluginControllerSpec extends Specification implements ControllerUnitTest<PluginController> {
 
     static final String PLUGIN_FILE = "rundeck-ui-plugin-examples-1.0-plugin.zip"
@@ -17,13 +15,11 @@ class PluginControllerSpec extends Specification implements ControllerUnitTest<P
     File uploadTestTargetDir = File.createTempDir()
 
     def setup() {
+        controller.frameworkService = Mock(FrameworkService)
         controller.rundeckFramework = Mock(Framework) {
             getBaseDir() >> uploadTestBaseDir
             getLibextDir() >> uploadTestTargetDir
         }
-    }
-
-    def cleanup() {
     }
 
     void "upload plugin no file specified"() {
@@ -31,8 +27,10 @@ class PluginControllerSpec extends Specification implements ControllerUnitTest<P
         controller.uploadPlugin()
 
         then:
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceType(_,_,_) >> true
         response.redirectUrl == "/menu/plugins"
-        flash.errors == ["A plugin file must be specified"]
+        flash.errors == ["plugin.error.missing.upload.file"]
     }
 
     void "install plugin no plugin url specified"() {
@@ -40,8 +38,10 @@ class PluginControllerSpec extends Specification implements ControllerUnitTest<P
         controller.installPlugin()
 
         then:
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceType(_,_,_) >> true
         response.redirectUrl == "/menu/plugins"
-        flash.errors == ["The plugin URL is required"]
+        flash.errors == ["plugin.error.missing.url"]
     }
 
     void "upload plugin"() {
@@ -54,6 +54,8 @@ class PluginControllerSpec extends Specification implements ControllerUnitTest<P
         controller.uploadPlugin()
 
         then:
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceType(_,_,_) >> true
         response.redirectUrl == "/menu/plugins"
         flash.installSuccess
         uploaded.exists()
@@ -72,11 +74,26 @@ class PluginControllerSpec extends Specification implements ControllerUnitTest<P
         controller.installPlugin()
 
         then:
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceType(_,_,_) >> true
         response.redirectUrl == "/menu/plugins"
         flash.installSuccess
         installed.exists()
 
         cleanup:
         installed.delete()
+    }
+
+    void "unauthorized install plugin fails"() {
+        when:
+        def pluginUrl = Thread.currentThread().getContextClassLoader().getResource(PLUGIN_FILE)
+        params.pluginUrl = pluginUrl.toString()
+        controller.installPlugin()
+
+        then:
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceType(_,_,_) >> false
+        response.redirectUrl == "/menu/plugins"
+        flash.errors == ["request.error.unauthorized.title"]
     }
 }
